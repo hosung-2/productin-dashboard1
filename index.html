@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>자동차 부품 생산관리 대시보드</title>
+
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- SheetJS -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- html2pdf.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, "Noto Sans KR", sans-serif;
+        }
+
+        .drop-zone {
+            transition: all 0.2s ease;
+        }
+
+        .drop-zone.dragover {
+            border-color: #2563eb;
+            background-color: #eff6ff;
+            transform: scale(1.01);
+        }
+
+        table {
+            border-collapse: collapse;
+        }
+
+        th {
+            white-space: nowrap;
+        }
+
+        td {
+            white-space: nowrap;
+        }
+
+        .dashboard-content {
+            background: white;
+        }
+
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-slate-100 min-h-screen">
+
+<div id="dashboard" class="max-w-7xl mx-auto p-4 md:p-8">
+
+    <!-- HEADER -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-slate-800">
+                자동차 부품 생산관리 대시보드
+            </h1>
+
+            <p class="text-sm text-slate-500 mt-1">
+                생산량 · 달성률 · 불량률을 한눈에 확인하세요.
+            </p>
+        </div>
+
+        <button
+            id="pdfButton"
+            onclick="downloadPDF()"
+            class="no-print bg-slate-800 hover:bg-slate-900 text-white px-5 py-3 rounded-lg font-semibold shadow">
+            📄 PDF 다운로드
+        </button>
+
+    </div>
+
+
+    <!-- EXCEL UPLOAD -->
+    <div class="no-print mb-6">
+
+        <div
+            id="dropZone"
+            class="drop-zone border-2 border-dashed border-slate-300 bg-white rounded-xl p-8 text-center cursor-pointer hover:border-blue-400">
+
+            <div class="text-4xl mb-3">
+                📊
+            </div>
+
+            <h2 class="text-lg font-bold text-slate-700">
+                Excel 파일을 여기에 드래그&드롭
+            </h2>
+
+            <p class="text-sm text-slate-500 mt-2">
+                또는 클릭하여 Excel 파일을 선택하세요
+            </p>
+
+            <p class="text-xs text-slate-400 mt-2">
+                지원 형식: .xlsx / .xls / .csv
+            </p>
+
+            <input
+                id="fileInput"
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                class="hidden">
+
+        </div>
+
+        <div id="fileName"
+             class="text-sm text-slate-500 mt-2 text-center">
+            아직 파일이 업로드되지 않았습니다.
+        </div>
+
+    </div>
+
+
+    <!-- KPI CARDS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+
+        <!-- 계획량 -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+
+            <div class="flex justify-between items-start">
+
+                <div>
+                    <p class="text-sm text-slate-500">
+                        계획량
+                    </p>
+
+                    <p id="plannedQty"
+                       class="text-3xl font-bold text-slate-800 mt-2">
+                        0
+                    </p>
+
+                    <p class="text-xs text-slate-400 mt-1">
+                        총 계획 생산량
+                    </p>
+                </div>
+
+                <div class="bg-blue-100 text-blue-600 p-3 rounded-lg">
+                    📋
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- 실적량 -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+
+            <div class="flex justify-between items-start">
+
+                <div>
+                    <p class="text-sm text-slate-500">
+                        실적량
+                    </p>
+
+                    <p id="actualQty"
+                       class="text-3xl font-bold text-slate-800 mt-2">
+                        0
+                    </p>
+
+                    <p class="text-xs text-slate-400 mt-1">
+                        총 실제 생산량
+                    </p>
+                </div>
+
+                <div class="bg-green-100 text-green-600 p-3 rounded-lg">
+                    🏭
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- 달성률 -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+
+            <div class="flex justify-between items-start">
+
+                <div>
+                    <p class="text-sm text-slate-500">
+                        달성률
+                    </p>
+
+                    <p id="achievementRate"
+                       class="text-3xl font-bold text-slate-800 mt-2">
+                        0.0%
+                    </p>
+
+                    <p class="text-xs text-slate-400 mt-1">
+                        실적량 ÷ 계획량
+                    </p>
+                </div>
+
+                <div class="bg-purple-100 text-purple-600 p-3 rounded-lg">
+                    📈
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- 불량률 -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+
+            <div class="flex justify-between items-start">
+
+                <div>
+                    <p class="text-sm text-slate-500">
+                        불량률
+                    </p>
+
+                    <p id="defectRate"
+                       class="text-3xl font-bold text-slate-800 mt-2">
+                        0.0%
+                    </p>
+
+                    <p class="text-xs text-slate-400 mt-1">
+                        불량수 ÷ 실적량
+                    </p>
+                </div>
+
+                <div class="bg-red-100 text-red-600 p-3 rounded-lg">
+                    ⚠️
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- CHART -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
+
+        <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-4">
+
+            <div>
+                <h2 class="text-lg font-bold text-slate-800">
+                    일자별 생산량 추이
+                </h2>
+
+                <p class="text-sm text-slate-500">
+                    Excel 데이터를 기준으로 일자별 실적 생산량을 표시합니다.
+                </p>
+            </div>
+
+        </div>
+
+        <div class="relative h-[350px]">
+            <canvas id="productionChart"></canvas>
+        </div>
+
+    </div>
+
+
+    <!-- TABLE -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+
+        <div class="p-5 border-b border-slate-200">
+
+            <h2 class="text-lg font-bold text-slate-800">
+                생산 데이터
+            </h2>
+
+            <p class="text-sm text-slate-500 mt-1">
+                업로드한 Excel의 내용을 그대로 표시합니다.
+            </p>
+
+        </div>
+
+
+        <div class="overflow-x-auto">
+
+            <table class="w-full text-sm">
+
+                <thead id="tableHead"
+                       class="bg-slate-100 text-slate-600">
+                </thead>
+
+                <tbody id="tableBody"
+                       class="divide-y divide-slate-200">
+                </tbody>
+
+            </table>
+
+        </div>
+
+
+        <div id="emptyMessage"
+             class="p-12 text-center text-slate-400">
+
+            <div class="text-4xl mb-3">
+                📂
+            </div>
+
+            <p>
+                Excel 파일을 업로드하면 데이터가 표시됩니다.
+            </p>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+    let productionChart = null;
+    let excelData = [];
+    let headers = [];
+
+
+    // =========================================================
+    // 요소
+    // =========================================================
+
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+
+
+    // =========================================================
+    // 파일 선택
+    // =========================================================
+
+    dropZone.addEventListener("click", () => {
+        fileInput.click();
+    });
+
+
+    fileInput.addEventListener("change", (event) => {
+
+        const file = event.target.files[0];
+
+        if (file) {
+            processExcel(file);
+        }
+
+    });
+
+
+    // =========================================================
+    // Drag & Drop
+    // =========================================================
+
+    dropZone.addEventListener("dragover", (event) => {
+
+        event.preventDefault();
+
+        dropZone.classList.add("dragover");
+
+    });
+
+
+    dropZone.addEventListener("dragleave", () => {
+
+        dropZone.classList.remove("dragover");
+
+    });
+
+
+    dropZone.addEventListener("drop", (event) => {
+
+        event.preventDefault();
+
+        dropZone.classList.remove("dragover");
+
+        const file = event.dataTransfer.files[0];
+
+        if (file) {
+            processExcel(file);
+        }
+
+    });
+
+
+    // =========================================================
+    // Excel 읽기
+    // =========================================================
+
+    function processExcel(file) {
+
+        document.getElementById("fileName").textContent =
+            "📁 " + file.name;
+
+        const reader = new FileReader();
+
+
+        reader.onload = function(e) {
+
+            try {
+
+                const data = new Uint8Array(e.target.result);
+
+                const workbook = XLSX.read(data, {
+                    type: "array",
+                    cellDates: true
+                });
+
+
+                const firstSheet =
+                    workbook.SheetNames[0];
+
+                const worksheet =
+                    workbook.Sheets[firstSheet];
+
+
+                excelData = XLSX.utils.sheet_to_json(
+                    worksheet,
+                    {
+                        defval: ""
+                    }
+                );
+
+
+                if (excelData.length === 0) {
+
+                    alert("Excel 파일에 데이터가 없습니다.");
+
+                    return;
+                }
+
+
+                headers =
+                    Object.keys(excelData[0]);
+
+
+                renderTable();
+
+                updateDashboard();
+
+            }
+            catch(error) {
+
+                console.error(error);
+
+                alert(
+                    "Excel 파일을 읽는 중 오류가 발생했습니다."
+                );
+
+            }
+
+        };
+
+
+        reader.readAsArrayBuffer(file);
+
+    }
+
+
+    // =========================================================
+    // 숫자 변환
+    // =========================================================
+
+    function toNumber(value) {
+
+        if (value === null || value === undefined) {
+            return 0;
+        }
+
+        if (typeof value === "number") {
+            return value;
+        }
+
+        const cleaned =
+            String(value)
+            .replace(/,/g, "")
+            .replace(/%/g, "")
+            .trim();
+
+        const number =
+            parseFloat(cleaned);
+
+        return isNaN(number) ? 0 : number;
+
+    }
+
+
+    // =========================================================
+    // 컬럼 자동 탐색
+    // =========================================================
+
+    function findColumn(possibleNames) {
+
+        for (const header of headers) {
+
+            const normalized =
+                String(header)
+                .replace(/\s/g, "")
+                .toLowerCase();
+
+
+            for (const name of possibleNames) {
+
+                const normalizedName =
+                    String(name)
+                    .replace(/\s/g, "")
+                    .toLowerCase();
+
+
+                if (
+                    normalized === normalizedName ||
+                    normalized.includes(normalizedName)
+                ) {
+
+                    return header;
+
+                }
+
+            }
+
+        }
+
+        return null;
+
+    }
+
+
+    // =========================================================
+    // 대시보드 계산
+    // =========================================================
+
+    function updateDashboard() {
+
+        const dateColumn = findColumn([
+            "일자",
+            "날짜",
+            "생산일",
+            "생산일자",
+            "date"
+        ]);
+
+
+        const planColumn = findColumn([
+            "계획량",
+            "계획",
+            "생산계획",
+            "plan",
+            "planned"
+        ]);
+
+
+        const actualColumn = findColumn([
+            "실적량",
+            "실적",
+            "생산량",
+            "생산수량",
+            "수량",
+            "actual",
+            "production"
+        ]);
+
+
+        const defectColumn = findColumn([
+            "불량수",
+            "불량량",
+            "불량",
+            "defect",
+            "defects"
+        ]);
+
+
+        let totalPlan = 0;
+        let totalActual = 0;
+        let totalDefect = 0;
+
+
+        const dailyProduction = {};
+
+
+        excelData.forEach(row => {
+
+            const plan =
+                planColumn
+                    ? toNumber(row[planColumn])
+                    : 0;
+
+
+            const actual =
+                actualColumn
+                    ? toNumber(row[actualColumn])
+                    : 0;
+
+
+            const defect =
+                defectColumn
+                    ? toNumber(row[defectColumn])
+                    : 0;
+
+
+            totalPlan += plan;
+            totalActual += actual;
+            totalDefect += defect;
+
+
+            if (dateColumn) {
+
+                let date =
+                    formatDate(row[dateColumn]);
+
+
+                if (!dailyProduction[date]) {
+                    dailyProduction[date] = 0;
+                }
+
+                dailyProduction[date] += actual;
+
+            }
+
+        });
+
+
+        const achievement =
+            totalPlan > 0
+                ? (totalActual / totalPlan) * 100
+                : 0;
+
+
+        const defectRate =
+            totalActual > 0
+                ? (totalDefect / totalActual) * 100
+                : 0;
+
+
+        document.getElementById("plannedQty")
+            .textContent =
+            formatNumber(totalPlan);
+
+
+        document.getElementById("actualQty")
+            .textContent =
+            formatNumber(totalActual);
+
+
+        document.getElementById("achievementRate")
+            .textContent =
+            achievement.toFixed(1) + "%";
+
+
+        document.getElementById("defectRate")
+            .textContent =
+            defectRate.toFixed(1) + "%";
+
+
+        drawChart(dailyProduction);
+
+    }
+
+
+    // =========================================================
+    // 날짜 처리
+    // =========================================================
+
+    function formatDate(value) {
+
+        if (value instanceof Date) {
+
+            const y =
+                value.getFullYear();
+
+            const m =
+                String(value.getMonth() + 1)
+                .padStart(2, "0");
+
+            const d =
+                String(value.getDate())
+                .padStart(2, "0");
+
+            return `${y}-${m}-${d}`;
+        }
+
+
+        if (typeof value === "number") {
+
+            const date =
+                XLSX.SSF.parse_date_code(value);
+
+            if (date) {
+
+                return `${date.y}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`;
+
+            }
+
+        }
+
+
+        return String(value || "");
+
+    }
+
+
+    // =========================================================
+    // 차트
+    // =========================================================
+
+    function drawChart(dailyProduction) {
+
+        const labels =
+            Object.keys(dailyProduction);
+
+
+        const values =
+            Object.values(dailyProduction);
+
+
+        const ctx =
+            document.getElementById(
+                "productionChart"
+            );
+
+
+        if (productionChart) {
+
+            productionChart.destroy();
+
+        }
+
+
+        productionChart =
+            new Chart(ctx, {
+
+                type: "bar",
+
+                data: {
+
+                    labels: labels,
+
+                    datasets: [
+
+                        {
+                            label: "생산량",
+
+                            data: values,
+
+                            backgroundColor:
+                                "rgba(37, 99, 235, 0.75)",
+
+                            borderColor:
+                                "rgba(37, 99, 235, 1)",
+
+                            borderWidth: 1,
+
+                            borderRadius: 5
+
+                        }
+
+                    ]
+
+                },
+
+
+                options: {
+
+                    responsive: true,
+
+                    maintainAspectRatio: false,
+
+
+                    plugins: {
+
+                        legend: {
+                            display: false
+                        },
+
+                        tooltip: {
+
+                            callbacks: {
+
+                                label: function(context) {
+
+                                    return (
+                                        " 생산량: " +
+                                        formatNumber(context.raw)
+                                    );
+
+                                }
+
+                            }
+
+                        }
+
+                    },
+
+
+                    scales: {
+
+                        y: {
+
+                            beginAtZero: true,
+
+                            ticks: {
+
+                                callback: function(value) {
+
+                                    return formatNumber(value);
+
+                                }
+
+                            }
+
+                        },
+
+                        x: {
+
+                            grid: {
+                                display: false
+                            }
+
+                        }
+
+                    }
+
+                }
+
+            });
+
+    }
+
+
+    // =========================================================
+    // 테이블
+    // =========================================================
+
+    function renderTable() {
+
+        const tableHead =
+            document.getElementById("tableHead");
+
+        const tableBody =
+            document.getElementById("tableBody");
+
+        const emptyMessage =
+            document.getElementById("emptyMessage");
+
+
+        tableHead.innerHTML = "";
+        tableBody.innerHTML = "";
+
+
+        if (excelData.length === 0) {
+
+            emptyMessage.style.display = "block";
+
+            return;
+
+        }
+
+
+        emptyMessage.style.display = "none";
+
+
+        // Header
+
+        const headerRow =
+            document.createElement("tr");
+
+
+        headers.forEach(header => {
+
+            const th =
+                document.createElement("th");
+
+            th.className =
+                "px-4 py-3 text-left font-semibold border-b border-slate-200";
+
+            th.textContent = header;
+
+            headerRow.appendChild(th);
+
+        });
+
+
+        tableHead.appendChild(headerRow);
+
+
+        // Body
+
+        excelData.forEach(row => {
+
+            const tr =
+                document.createElement("tr");
+
+            tr.className =
+                "hover:bg-slate-50";
+
+
+            headers.forEach(header => {
+
+                const td =
+                    document.createElement("td");
+
+                td.className =
+                    "px-4 py-3 text-slate-700";
+
+
+                let value = row[header];
+
+
+                if (value instanceof Date) {
+                    value = formatDate(value);
+                }
+
+
+                td.textContent =
+                    value ?? "";
+
+
+                tr.appendChild(td);
+
+            });
+
+
+            tableBody.appendChild(tr);
+
+        });
+
+    }
+
+
+    // =========================================================
+    // 숫자 표시
+    // =========================================================
+
+    function formatNumber(number) {
+
+        return Number(number || 0)
+            .toLocaleString("ko-KR", {
+                maximumFractionDigits: 0
+            });
+
+    }
+
+
+    // =========================================================
+    // PDF 다운로드
+    // =========================================================
+
+    function downloadPDF() {
+
+        if (excelData.length === 0) {
+
+            alert(
+                "먼저 Excel 파일을 업로드해주세요."
+            );
+
+            return;
+
+        }
+
+
+        const element =
+            document.getElementById("dashboard");
+
+
+        const options = {
+
+            margin: 8,
+
+            filename:
+                "생산관리_대시보드.pdf",
+
+            image: {
+
+                type: "jpeg",
+
+                quality: 0.98
+
+            },
+
+            html2canvas: {
+
+                scale: 2,
+
+                useCORS: true,
+
+                backgroundColor: "#f1f5f9"
+
+            },
+
+            jsPDF: {
+
+                unit: "mm",
+
+                format: "a4",
+
+                orientation: "landscape"
+
+            },
+
+            pagebreak: {
+
+                mode: [
+                    "avoid-all",
+                    "css",
+                    "legacy"
+                ]
+
+            }
+
+        };
+
+
+        html2pdf()
+            .set(options)
+            .from(element)
+            .save();
+
+    }
+
+
+</script>
+
+</body>
+</html>
